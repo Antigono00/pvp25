@@ -1,5 +1,5 @@
-// src/components/battle/ToolSpellModal.jsx - ENHANCED VERSION WITH DETAILED STATS
-import React, { useState, useEffect } from 'react';
+// src/components/battle/ToolSpellModal.jsx - FIXED INFINITE RENDERING
+import React, { useState, useEffect, useMemo } from 'react';
 import { getToolEffect, getSpellEffect } from '../../utils/itemEffects';
 
 const ToolSpellModal = ({ items, type, onSelect, onClose, showTabs = false, casterStats = null }) => {
@@ -27,29 +27,6 @@ const ToolSpellModal = ({ items, type, onSelect, onClose, showTabs = false, cast
       });
     };
   }, []);
-  
-  // If there's no items or the array is empty, show a message
-  if (!items || items.length === 0) {
-    return (
-      <div className="tool-spell-modal-overlay" onClick={onClose} style={{ zIndex: 99999 }}>
-        <div className="tool-spell-modal" onClick={(e) => e.stopPropagation()} style={{ zIndex: 100000 }}>
-          <div className="modal-header">
-            <h3>No {type}s Available</h3>
-            <button className="close-btn" onClick={onClose}>×</button>
-          </div>
-          <div className="modal-content">
-            <p>You don't have any {type}s to use right now.</p>
-            <button className="action-btn" onClick={onClose}>Close</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-  
-  // Function to handle item selection
-  const handleItemSelect = (item) => {
-    onSelect(item);
-  };
   
   // Get detailed item stats based on actual game mechanics
   const getDetailedItemStats = (item, itemType) => {
@@ -259,8 +236,51 @@ const ToolSpellModal = ({ items, type, onSelect, onClose, showTabs = false, cast
     return descriptions;
   };
   
+  // Function to handle item selection
+  const handleItemSelect = (item) => {
+    onSelect(item);
+  };
+  
+  // CRITICAL FIX: Memoize all item calculations to prevent re-renders
+  const processedItems = useMemo(() => {
+    if (!items || items.length === 0) return [];
+    
+    return items.map(item => {
+      const detailedStats = getDetailedItemStats(item, type);
+      const statChanges = formatStatChanges(detailedStats.effect.statChanges);
+      const descriptions = getEnhancedDescription(item, type, detailedStats);
+      
+      return {
+        ...item,
+        _processed: {
+          detailedStats,
+          statChanges,
+          descriptions
+        }
+      };
+    });
+  }, [items, type, casterStats]); // Only recalculate when these change
+  
+  // If there's no items or the array is empty, show a message
+  if (!items || items.length === 0) {
+    return (
+      <div className="tool-spell-modal-overlay" onClick={onClose} style={{ zIndex: 99999 }}>
+        <div className="tool-spell-modal" onClick={(e) => e.stopPropagation()} style={{ zIndex: 100000 }}>
+          <div className="modal-header">
+            <h3>No {type}s Available</h3>
+            <button className="close-btn" onClick={onClose}>×</button>
+          </div>
+          <div className="modal-content">
+            <p>You don't have any {type}s to use right now.</p>
+            <button className="action-btn" onClick={onClose}>Close</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
   // If using the special mode with tabs, filter items by active tab
-  let displayedItems = items;
+  let displayedItems = processedItems;
   
   // Standard single-type modal
   return (
@@ -274,9 +294,8 @@ const ToolSpellModal = ({ items, type, onSelect, onClose, showTabs = false, cast
         <div className="modal-content">
           <div className="items-grid enhanced">
             {displayedItems.map(item => {
-              const detailedStats = getDetailedItemStats(item, type);
-              const statChanges = formatStatChanges(detailedStats.effect.statChanges);
-              const descriptions = getEnhancedDescription(item, type, detailedStats);
+              // Use pre-calculated values
+              const { detailedStats, statChanges, descriptions } = item._processed;
               
               return (
                 <div 
