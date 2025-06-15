@@ -1,4 +1,4 @@
-// src/components/battle/TeamSelector.jsx
+// src/components/battle/TeamSelector.jsx - FIXED INFINITE RENDERING
 import React, { useState, useEffect, useMemo } from 'react';
 import { checkFieldSynergies, calculateTeamRating, calculateCombatRating } from '../../utils/battleCalculations';
 import { calculateDifficultyRating } from '../../utils/difficultySettings';
@@ -54,6 +54,15 @@ const TeamSelector = ({
     };
   }, [selectedCreatures, difficulty]);
   
+  // CRITICAL FIX: Memoize creature ratings to prevent recalculation
+  const creatureRatings = useMemo(() => {
+    const ratings = new Map();
+    availableCreatures.forEach(creature => {
+      ratings.set(creature.id, calculateCombatRating(creature));
+    });
+    return ratings;
+  }, [availableCreatures]);
+  
   // Sort creatures by various criteria
   const sortedCreatures = useMemo(() => {
     return [...availableCreatures].sort((a, b) => {
@@ -66,10 +75,12 @@ const TeamSelector = ({
       const rarityDiff = (rarityOrder[b.rarity] || 0) - (rarityOrder[a.rarity] || 0);
       if (rarityDiff !== 0) return rarityDiff;
       
-      // Then by combat rating
-      return calculateCombatRating(b) - calculateCombatRating(a);
+      // Then by combat rating (use pre-calculated ratings)
+      const ratingA = creatureRatings.get(a.id) || 0;
+      const ratingB = creatureRatings.get(b.id) || 0;
+      return ratingB - ratingA;
     });
-  }, [availableCreatures]);
+  }, [availableCreatures, creatureRatings]);
   
   // Handle creature selection
   const handleCreatureSelect = (creature) => {
@@ -167,7 +178,8 @@ const TeamSelector = ({
           <div className="creature-grid">
             {sortedCreatures.map(creature => {
               const isSelected = selectedCreatures.some(c => c.id === creature.id);
-              const rating = calculateCombatRating(creature);
+              // Use pre-calculated rating
+              const rating = creatureRatings.get(creature.id) || 0;
               
               return (
                 <div
